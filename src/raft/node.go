@@ -6,19 +6,57 @@ type Node struct {
 	state *State
 }
 
-func (n *Node) RequestVote(candidateTerm, candidateId, lastLogIdx, lastLogTerm int) (term int, voteGranted bool) {
-	if candidateTerm < n.state.currentTerm {
-		voteGranted = false
+type RequestVoteReq struct {
+	CandidateTerm int
+	CandidateId   int
+	LastLogIdx    int
+	LastLogTerm   int
+}
+
+type RequestVoteResp struct {
+	Term        int
+	VoteGranted bool
+}
+
+func (n *Node) RequestVote(req *RequestVoteReq) (resp *RequestVoteResp) {
+	resp = &RequestVoteResp{
+		VoteGranted: false,
+		Term:        n.state.currentTerm,
+	}
+	// return true if the request from the same node
+	if req.CandidateTerm == n.state.currentTerm && req.CandidateId == n.state.voteFor {
+		resp.VoteGranted = true
+		resp.Term = n.state.currentTerm
 		return
 	}
-	if n.state.voteFor != 0 && n.state.voteFor != candidateId {
-		voteGranted = false
+	// ignore the old term
+	if req.CandidateTerm < n.state.currentTerm {
 		return
 	}
-	if lastLogIdx >= n.state.commitIdx {
-		voteGranted = true
-		term = candidateTerm
+	// the node has voted for other node in the same term.
+	if n.state.currentTerm == req.CandidateTerm && n.state.voteFor != 0 && n.state.voteFor != req.CandidateId {
+		return
 	}
+	// a bigger term
+	if req.CandidateTerm > n.state.currentTerm {
+		n.state.currentTerm = req.CandidateTerm
+		n.state.role = FollowerRole
+	}
+	// use new candidate term
+	resp.Term = req.CandidateTerm
+	// check log version
+	if n.state.lastLogIdx-1 >= 0 {
+		lastLogTerm := n.state.logEntries[n.state.lastLogIdx-1].Term
+		if lastLogTerm > req.LastLogTerm || // request with old term
+			(lastLogTerm == req.LastLogTerm && n.state.lastLogIdx > req.LastLogIdx) { // request with the same term and old idx
+			resp.VoteGranted = false
+			return
+		}
+	}
+	// set local node
+	n.state.role = FollowerRole
+	resp.VoteGranted = true
+	n.state.voteFor = req.CandidateId
 	return
 }
 
