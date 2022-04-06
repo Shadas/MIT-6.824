@@ -1,11 +1,5 @@
 package raft
 
-import "math"
-
-type Node struct {
-	state *State
-}
-
 type RequestVoteReq struct {
 	CandidateTerm int
 	CandidateId   int
@@ -120,7 +114,7 @@ func (n *Node) AppendEntries(req *AppendEntriesReq) (resp *AppendEntriesResp) {
 	}
 	// update node's commitIdx
 	if req.leaderCommit > n.state.commitIdx {
-		min := int(math.Min(float64(req.leaderCommit), float64(n.state.lastLogIdx)))
+		min := minInt(req.leaderCommit, n.state.lastLogIdx)
 		n.state.commitIdx = min
 	}
 	return
